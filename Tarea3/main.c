@@ -28,7 +28,7 @@ typedef struct tipoEscenario {
   char id[10];           
   char room_name[501];   
   char description[501]; 
-  struct tipoEscenario *conexiones[4];          
+  List *conexiones;          
   List *items; // Lista de items
   char is_final[10]; // Indica si es un escenario final
 } tipoEscenario;
@@ -106,42 +106,34 @@ void generar_conexiones_desde_lista(HashMap *escenarios,List *escenarios_list, t
       if (strcmp(guardado->arriba, "-1") != 0) {
           for (tipoEscenario *otro = list_first(escenarios_list); otro != NULL; otro = list_next(escenarios_list)) {
               if (strcmp(guardado->arriba, otro->id) == 0) {
-                  escenario->conexiones[0] = (struct tipoEscenario *)otro;
+                  list_pushBack(escenario->conexiones, otro);
                   break;
               }
           }
-      } else {
-          escenario->conexiones[0] = NULL;
       }
       if (strcmp(guardado->abajo, "-1") != 0) {
           for (tipoEscenario *otro = list_first(escenarios_list); otro != NULL; otro = list_next(escenarios_list)) {
               if (strcmp(guardado->abajo, otro->id) == 0) {
-                  escenario->conexiones[1] = (struct tipoEscenario *)otro;
+                list_pushBack(escenario->conexiones, otro);
                   break;
               }
           }
-      } else {
-          escenario->conexiones[1] = NULL;
       }
       if (strcmp(guardado->izquierda, "-1") != 0) {
           for (tipoEscenario *otro = list_first(escenarios_list); otro != NULL; otro = list_next(escenarios_list)) {
               if (strcmp(guardado->izquierda, otro->id) == 0) {
-                  escenario->conexiones[2] = (struct tipoEscenario *)otro;
+                list_pushBack(escenario->conexiones, otro);
                   break;
               }
           }
-      } else {
-          escenario->conexiones[2] = NULL;
       }
       if (strcmp(guardado->derecha, "-1") != 0) {
           for (tipoEscenario *otro = list_first(escenarios_list); otro != NULL; otro = list_next(escenarios_list)) {
               if (strcmp(guardado->derecha, otro->id) == 0) {
-                  escenario->conexiones[3] = (struct tipoEscenario *)otro;
+                list_pushBack(escenario->conexiones, otro);
                   break;
               }
           }
-      } else {
-          escenario->conexiones[3] = NULL;
       }
     }
   }
@@ -150,7 +142,7 @@ void generar_conexiones_desde_lista(HashMap *escenarios,List *escenarios_list, t
 // Función para cargar canciones desde un archivo CSV
 void leer_escenarios(HashMap *escenarios, tipoJugador *escenario_actual, List *escenarios_list) {
   // Intenta abrir el archivo CSV que contiene datos de películas
-  FILE *archivo = fopen("Data/graphquest.csv", "r");
+  FILE *archivo = fopen("Tarea3/Data/graphquest.csv", "r");
   if (archivo == NULL) {
     perror(
         "Error al abrir el archivo"); // Informa si el archivo no puede abrirse
@@ -236,9 +228,7 @@ void leer_escenarios(HashMap *escenarios, tipoJugador *escenario_actual, List *e
     } else {
         nuevo->items = NULL;
     }
-    for (int i = 0; i < 4; i++) {
-        nuevo->conexiones[i] = NULL;
-    }
+    nuevo->conexiones = list_create(); // Inicializa la lista de conexiones
     list_pushBack(escenarios_list, nuevo);
     pair = nextMap(escenarios);
   }
@@ -345,34 +335,63 @@ void descartar_items(tipoJugador *estado_actual) {
 
 void avanzar_escenario(tipoJugador *estado_actual, HashMap *escenarios) {
   printf("Direcciones disponibles:\n");
-  const char *direcciones[] = {"Arriba", "Abajo", "Izquierda", "Derecha"};
-  int direccion_valida = 0;
   // Mostrar las direcciones disponibles
-  for (int i = 0; i < 4; i++) {
-      if (estado_actual->escenario_actual->conexiones[i] != NULL) {
-          printf("%d) %s\n", i + 1, direcciones[i]);
-          direccion_valida = 1;
-      }
+  for (tipoEscenario *conexion = list_first(estado_actual->escenario_actual->conexiones); conexion != NULL; conexion = list_next(estado_actual->escenario_actual->conexiones)) {
+      printf("ID) %s\n", conexion->id);
+      printf("Nombre) %s\n", conexion->room_name);
   }
   // Verificar si hay direcciones válidas
-  if (!direccion_valida) {
-      printf("No hay direcciones disponibles para avanzar.\n");
-      return;
-  }
-  printf("Ingrese el número de la dirección a la que desea avanzar (0 para cancelar): ");
-  int opcion;
-  scanf("%d", &opcion);
-  if (opcion == 0) {
+  printf("Ingrese el ID de la dirección a la que desea avanzar (0 para cancelar): ");
+  char opcion[10];
+  scanf("%s", &opcion);
+  if (strcmp(opcion, "0") == 0) {
       printf("Operación cancelada.\n");
       return;
   }
-  // Validar la dirección seleccionada
-  if (opcion < 1 || opcion > 4 || estado_actual->escenario_actual->conexiones[opcion - 1] == NULL) {
-      printf("Dirección no válida. Intente nuevamente.\n");
-      return;
+  for (tipoEscenario *conexion = list_first(estado_actual->escenario_actual->conexiones); conexion != NULL; conexion = list_next(estado_actual->escenario_actual->conexiones)) {
+      if (strcmp(conexion->id, estado_actual->escenario_actual->id) == 0) {
+          printf("No puedes avanzar a la misma dirección.\n");
+          return;
+      }
+      if (strcmp(conexion->id, opcion) != 0) {
+          // Calcular el tiempo usado
+          int tiempo_usado = (int)ceil((estado_actual->peso_total + 1) / 10.0);
+          estado_actual->tiempo_restante -= tiempo_usado;
+          // Verificar si el tiempo se agotó
+          if (estado_actual->tiempo_restante <= 0) {
+              printf("¡El tiempo se ha agotado! Has perdido.\n");
+              printf("Puntaje total: %d\n", estado_actual->puntaje_acumulado);
+              printf("Items en inventario:\n");
+              for (tipoItem *item = list_first(estado_actual->inventario); item != NULL; item = list_next(estado_actual->inventario)) {
+                  printf("  - %s (%d pts, %d kg)\n", item->nombre, item->valor, item->peso);
+              }
+              printf("Reiniciando la partida...\n");
+              presioneTeclaParaContinuar();
+              leer_escenarios(escenarios, estado_actual, NULL);
+              return;
+          }
+          // Actualizar el escenario actual
+          estado_actual->escenario_actual = conexion;
+          printf("Has avanzado a: %s\n", estado_actual->escenario_actual->room_name);
+          printf("Descripción: %s\n", estado_actual->escenario_actual->description);
+          // Verificar si se alcanzó el escenario final
+          if (strcmp(estado_actual->escenario_actual->is_final, "Si") == 0) {
+              printf("¡Has alcanzado el escenario final!\n");
+              printf("Puntaje total: %d\n", estado_actual->puntaje_acumulado);
+              printf("Tiempo restante: %d\n", estado_actual->tiempo_restante);
+              printf("Items en inventario:\n");
+              for (tipoItem *item = list_first(estado_actual->inventario); item != NULL; item = list_next(estado_actual->inventario)) {
+                  printf("  - %s (%d pts, %d kg)\n", item->nombre, item->valor, item->peso);
+              }
+              printf("Reiniciando la partida...\n");
+              presioneTeclaParaContinuar();
+              leer_escenarios(escenarios, estado_actual, NULL);
+          }
+          return;
+      }
   }
   // Calcular el tiempo usado
-  int tiempo_usado = (int)ceil((estado_actual->peso_total + 1) / 10.0);
+  /*int tiempo_usado = (int)ceil((estado_actual->peso_total + 1) / 10.0);
   estado_actual->tiempo_restante -= tiempo_usado;
   // Verificar si el tiempo se agotó
   if (estado_actual->tiempo_restante <= 0) {
@@ -403,16 +422,15 @@ void avanzar_escenario(tipoJugador *estado_actual, HashMap *escenarios) {
       printf("Reiniciando la partida...\n");
       presioneTeclaParaContinuar();
       leer_escenarios(escenarios, estado_actual, NULL);
-  }
+  }*/
 }
 
 void imprimir_conexiones(List *escenarios_list) {
   for (tipoEscenario *escenario = list_first(escenarios_list); escenario != NULL; escenario = list_next(escenarios_list)) {
       printf("Escenario: %s\n", escenario->id);
-      printf("  Arriba: %s\n", escenario->conexiones[0] != NULL ? escenario->conexiones[0]->id : "NULL");
-      printf("  Abajo: %s\n", escenario->conexiones[1] ? escenario->conexiones[1]->id : "NULL");
-      printf("  Izquierda: %s\n", escenario->conexiones[2] ? escenario->conexiones[2]->id : "NULL");
-      printf("  Derecha: %s\n", escenario->conexiones[3] ? escenario->conexiones[3]->id : "NULL");
+      for (tipoEscenario *conexion = list_first(escenario->conexiones); conexion != NULL; conexion = list_next(escenario->conexiones)) {
+          printf("  Conexión: %s\n", conexion->id);
+      }
   }
 }
 
